@@ -49,26 +49,40 @@ def _paginate_with_dead_link_mask(
     :param page: The page number.
     :return: Tuple of start and end.
     """
+    print(f"{page_size=}, {page=}")
     query_hash = get_query_hash(s)
+    print(f"{query_hash=}")
     query_mask = get_query_mask(query_hash)
+    print(f"{query_mask=}")
     if not query_mask:
+        # No query mask exists for this particular query hash, so we buffer 2*page_size
+        # results on the initial query.
+        # See: https://github.com/cc-archive/cccatalog-api/issues/314
+        print("No query mask")
         start = 0
         end = ceil(page_size * page / (1 - DEAD_LINK_RATIO))
     elif page_size * (page - 1) > sum(query_mask):
+        # If we've run out of mask results to use, pull another pseudo-page
+        print("Run out of pre-masked results, getting more")
         start = len(query_mask)
         end = ceil(page_size * page / (1 - DEAD_LINK_RATIO))
     else:
+        print("Using cached mask results")
+        # Possible explanation: https://github.com/cc-archive/cccatalog-api/pull/358
         accu_query_mask = list(accumulate(query_mask))
         start = 0
         if page > 1:
             try:
+                # Start at value one past page size
                 start = accu_query_mask.index(page_size * (page - 1) + 1)
             except ValueError:
+                print("Hit value error when trying to get new page")
                 start = accu_query_mask.index(page_size * (page - 1)) + 1
         if page_size * page > sum(query_mask):
             end = ceil(page_size * page / (1 - DEAD_LINK_RATIO))
         else:
             end = accu_query_mask.index(page_size * page) + 1
+    print(f"{start=}, {end=}")
     return start, end
 
 
